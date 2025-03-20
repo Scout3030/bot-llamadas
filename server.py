@@ -50,98 +50,93 @@ def generar_respuesta_chatgpt(conversacion):
     )
     return response.choices[0].message.content.strip()
 
-def extraer_datos(conversacion):
-    operacion = zona = precio = habitaciones = fecha = ""
-    for msg in conversacion:
-        if msg["role"] == "user":
-            txt = msg["content"].lower()
-            if not operacion and re.search(r"\b(compra|comprar|venta|vender)\b", txt):
-                operacion = "compra" if re.search(r"\b(compra|comprar)\b", txt) else "venta"
-            if not zona and re.search(r"(zona|distrito|barrio|centro|norte|sur|este|oeste)", txt):
-                zona = txt
-            if not precio and re.search(r"(precio|presupuesto|\d+\s?(mil|euros|\€))", txt):
-                precio = txt
-            if not habitaciones and re.search(r"\b(\d+|una|dos|tres|cuatro|cinco)\s+habitaciones?\b", txt):
-                habitaciones = txt
-            if not fecha and re.search(r"\b(hoy|mañana|\d{1,2}/\d{1,2}|\d{1,2}-\d{1,2}|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b", txt):
-                fecha = txt
-    return operacion, zona, precio, habitaciones, fecha
-
-def siguiente_pregunta_por_dato_faltante(operacion, zona, precio, habitaciones, fecha):
-    if not operacion:
-        return "Pregunta al usuario qué tipo de operación desea realizar, si compra o venta."
-    elif not zona:
-        return "Ya sabemos que quiere comprar o vender. Pregunta ahora en qué zona desea buscar la propiedad."
-    elif not precio:
-        return "Ya sabemos zona y operación. Pregunta ahora cuál es su presupuesto aproximado."
-    elif not habitaciones:
-        return "Pregunta cuántas habitaciones necesita la propiedad."
-    elif not fecha:
-        return "Pregunta para qué fecha desea mudarse o cerrar la compra."
-    else:
-        return None
-
 @app.route("/voice", methods=['POST'])
 def voice():
     user_input = request.form.get("SpeechResult", "").strip()
     log(f"[INPUT DEL USUARIO] {user_input}")
 
-    if not os.path.exists("storage/app/conversacion.tmp"):
-        conversacion = [{
-            "role": "system",
-            "content": (
-                "Eres un asistente inmobiliario telefónico que conversa únicamente en español. Tu tarea es recopilar de forma conversacional los siguientes datos, uno por uno: "
-                "1) tipo de operación (compra o venta), 2) zona de interés, 3) rango de precio, 4) número de habitaciones, y 5) fecha de entrada deseada. "
-                "Haz una pregunta a la vez, escucha atentamente las respuestas, responde con frases naturales y amables en español. No hables inglés. Si la respuesta no se entiende, pide amablemente que la repita o aclare."
-            )
-        }]
-    else:
+    # Estructura de flujo de preguntas
+    preguntas = [
+        {"clave": "operacion", "texto": "¿Qué tipo de operación deseas? ¿Compra o venta?"},
+        {"clave": "zona", "texto": "¿En qué zona deseas buscar la propiedad?"},
+        {"clave": "precio", "texto": "¿Cuál es tu presupuesto aproximado?"},
+        {"clave": "habitaciones", "texto": "¿Cuántas habitaciones necesitas?"},
+        {"clave": "fecha", "texto": "¿Para qué fecha deseas mudarte o cerrar la compra?"}
+    ]
+
+    # Cargar estado anterior
+    if os.path.exists("storage/app/conversacion.tmp"):
         with open("storage/app/conversacion.tmp", "r") as f:
-            raw = f.read().strip()
-            conversacion = eval(raw) if raw else []
-
-    if not user_input:
-        log("[SIN RESPUESTA] El usuario no respondió. Iniciamos conversación con la primera pregunta.")
-        respuesta = "Hola, soy tu asistente inmobiliario. ¿Qué tipo de operación deseas? ¿Compra o venta?"
-        conversacion.append({"role": "assistant", "content": respuesta})
-        twiml = VoiceResponse()
-        gather = twiml.gather(
-            input="speech",
-            speechTimeout="auto",
-            language="es-ES",
-            hints="comprar, alquilar, vivienda, casa, euros, zona, centro, habitaciones, una, dos, tres",
-            action="/voice",
-            method="POST"
-        )
-        gather.say(respuesta, voice="alice", language="es-ES")
-        return Response(str(twiml), mimetype="application/xml")
-
-    if user_input:
-        conversacion.append({"role": "user", "content": user_input})
-
-    # Verificar si ya se tienen suficientes datos para guardar el lead
-    operacion, zona, precio, habitaciones, fecha = extraer_datos(conversacion)
-
-    # Forzar el flujo paso a paso
-    instruccion = siguiente_pregunta_por_dato_faltante(operacion, zona, precio, habitaciones, fecha)
-
-    if instruccion:
-        prompt = [
-            {"role": "system", "content": "Eres un asistente inmobiliario amable y conversacional. Habla solo en español y haz una sola pregunta clara a la vez."},
-            {"role": "user", "content": instruccion}
-        ]
-        respuesta = generar_respuesta_chatgpt(prompt)
-        log(f"[PREGUNTA DEL AGENTE] {respuesta}")
-        conversacion.append({"role": "assistant", "content": respuesta})
+            estado = eval(f.read().strip())
     else:
-        conversacion_txt = "\n".join([f"{m['role']}: {m['content']}" for m in conversacion])
-        guardar_lead(operacion, zona, precio, habitaciones, fecha, conversacion_txt)
+        estado = {
+            "pregunta_actual": 0,
+            "intentos": 0,
+            "respuestas": {},
+            "historial": []
+        }
+
+    # Validación de respuesta con GPT (solo si hay input del usuario)
+    if user_input:
+        pregunta_actual = preguntas[estado["pregunta_actual"]]
+        prompt_validacion = [
+            {"role": "system", "content": f"Evalúa si esta respuesta del usuario es coherente con la pregunta '{pregunta_actual['texto']}'. Solo responde 'válida' o 'inválida'."},
+            {"role": "user", "content": user_input}
+        ]
+        validacion = generar_respuesta_chatgpt(prompt_validacion).lower()
+        log(f"[VALIDACIÓN GPT] {validacion}")
+
+        if "válida" in validacion:
+            estado["respuestas"][pregunta_actual["clave"]] = user_input
+            estado["pregunta_actual"] += 1
+            estado["intentos"] = 0
+        else:
+            estado["intentos"] += 1
+            if estado["intentos"] >= 3:
+                estado["pregunta_actual"] += 1
+                estado["intentos"] = 0
+            else:
+                respuesta = f"Lo siento, no comprendí eso. ¿Podrías repetirlo? {pregunta_actual['texto']}"
+                estado["historial"].append({"role": "assistant", "content": respuesta})
+                twiml = VoiceResponse()
+                gather = twiml.gather(
+                    input="speech",
+                    speechTimeout="auto",
+                    language="es-ES",
+                    hints="comprar, alquilar, vivienda, casa, euros, zona, centro, habitaciones, una, dos, tres",
+                    action="/voice",
+                    method="POST"
+                )
+                gather.say(respuesta, voice="alice", language="es-ES")
+                with open("storage/app/conversacion.tmp", "w") as f:
+                    f.write(str(estado))
+                return Response(str(twiml), mimetype="application/xml")
+
+    # Verificar si ya se completaron todas las preguntas
+    if estado["pregunta_actual"] >= len(preguntas):
+        conversacion_txt = "\n".join([f"{k}: {v}" for k, v in estado["respuestas"].items()])
+        guardar_lead(
+            estado["respuestas"].get("operacion", ""),
+            estado["respuestas"].get("zona", ""),
+            estado["respuestas"].get("precio", ""),
+            estado["respuestas"].get("habitaciones", ""),
+            estado["respuestas"].get("fecha", ""),
+            conversacion_txt
+        )
         os.remove("storage/app/conversacion.tmp")
         final_resp = VoiceResponse()
         final_resp.say("Gracias por tu información. Un asesor se pondrá en contacto contigo.", voice="alice", language="es-ES")
         return Response(str(final_resp), mimetype="application/xml")
 
-    # Continuar conversación
+    # Pregunta siguiente
+    siguiente_pregunta = preguntas[estado["pregunta_actual"]]["texto"]
+    estado["historial"].append({"role": "assistant", "content": siguiente_pregunta})
+
+    # Guardar estado actualizado
+    os.makedirs("storage/app", exist_ok=True)
+    with open("storage/app/conversacion.tmp", "w") as f:
+        f.write(str(estado))
+
     twiml = VoiceResponse()
     gather = twiml.gather(
         input="speech",
@@ -151,7 +146,7 @@ def voice():
         action="/voice",
         method="POST"
     )
-    gather.say(respuesta, voice="alice", language="es-ES")
+    gather.say(siguiente_pregunta, voice="alice", language="es-ES")
     return Response(str(twiml), mimetype="application/xml")
 
 if __name__ == "__main__":
