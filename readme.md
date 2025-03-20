@@ -12,6 +12,12 @@ Instalar dependencias
 pip install -r requirements.txt
 ````
 
+Freezy dependencias
+
+```` bash
+pip freeze > requirements.txt
+````
+
 Iniciar servidor en local
 
 ```` bash
