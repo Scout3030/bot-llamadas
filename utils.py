@@ -7,13 +7,16 @@ import re
 
 openai.api_key = openai_api_key
 
+os.makedirs("storage/app", exist_ok=True)
+open("storage/app/conversacion.tmp", "a").close()
+
 # Voice engine
 engine = pyttsx3.init()
 
 # Logging
 os.makedirs("logs", exist_ok=True)
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-log_filename = f"storage/logs/conversacion_{timestamp}.log"
+log_filename = f"storage/logs/python.log"
 log_file = open(log_filename, "w")
 
 def log(text):
