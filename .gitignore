@@ -19,7 +19,6 @@ __pycache__/
 
 # Ignorar logs
 *.log
-logs/
 
 # Ignorar configuraciones del editor
 .vscode/
