@@ -56,14 +56,14 @@ def extraer_datos(conversacion):
         if msg["role"] == "user":
             txt = msg["content"].lower()
             if not operacion and re.search(r"\b(compra|comprar|venta|vender)\b", txt):
-                operacion = "compra" if "compra" in txt or "comprar" in txt else "venta"
-            if not zona and "zona" in txt:
+                operacion = "compra" if re.search(r"\b(compra|comprar)\b", txt) else "venta"
+            if not zona and re.search(r"(zona|distrito|barrio|centro|norte|sur|este|oeste)", txt):
                 zona = txt
-            if not precio and ("precio" in txt or "euros" in txt or "mil" in txt):
+            if not precio and re.search(r"(precio|presupuesto|\d+\s?(mil|euros|\€))", txt):
                 precio = txt
-            if not habitaciones and re.search(r"\bhabitaciones?\b", txt):
+            if not habitaciones and re.search(r"\b(\d+|una|dos|tres|cuatro|cinco)\s+habitaciones?\b", txt):
                 habitaciones = txt
-            if not fecha and re.search(r"\b(hoy|mañana|\d{1,2}/\d{1,2}|\babril|\bmayo|\bjunio|\bjulio|\bagosto)", txt):
+            if not fecha and re.search(r"\b(hoy|mañana|\d{1,2}/\d{1,2}|\d{1,2}-\d{1,2}|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b", txt):
                 fecha = txt
     return operacion, zona, precio, habitaciones, fecha
 
@@ -72,32 +72,23 @@ def voice():
     user_input = request.form.get("SpeechResult", "").strip()
     log(f"[INPUT DEL USUARIO] {user_input}")
 
-    # Cargar o inicializar conversación
-    if not os.path.exists("storage/app/conversacion.tmp"):
-        conversacion = []
-    else:
-        with open("storage/app/conversacion.tmp", "r") as f:
-            raw = f.read().strip()
-            conversacion = eval(raw) if raw else []
+    conversacion = [{
+        "role": "system",
+        "content": (
+            "Eres un asistente inmobiliario telefónico. Tu tarea es obtener los siguientes datos, uno por uno: "
+            "1) tipo de operación (compra o venta), 2) zona de interés, 3) rango de precio, 4) número de habitaciones, y 5) fecha de entrada deseada. "
+            "Haz una pregunta a la vez y espera respuesta antes de continuar. Sé amable y claro."
+        )
+    }]
 
     if not user_input:
-        log("[SIN RESPUESTA] El usuario no respondió. Repetimos la última pregunta.")
+        log("[SIN RESPUESTA] El usuario no respondió. Iniciamos conversación con la primera pregunta.")
+        respuesta = "Hola, soy tu asistente inmobiliario. ¿Qué tipo de operación deseas? ¿Compra o venta?"
+        conversacion.append({"role": "assistant", "content": respuesta})
         twiml = VoiceResponse()
         gather = twiml.gather(input="speech", timeout=10, action="/voice", method="POST")
-        ultima_pregunta = next((msg["content"] for msg in reversed(conversacion) if msg["role"] == "assistant"), "¿Podrías repetir por favor?")
-        gather.say(ultima_pregunta, voice="alice", language="es-ES")
+        gather.say(respuesta, voice="alice", language="es-ES")
         return Response(str(twiml), mimetype="application/xml")
-
-    # Agregar prompt inicial si no existe
-    if not any(m for m in conversacion if m["role"] == "system"):
-        conversacion.insert(0, {
-            "role": "system",
-            "content": (
-                "Eres un asistente inmobiliario telefónico. Tu tarea es obtener los siguientes datos, uno por uno: "
-                "1) tipo de operación (compra o venta), 2) zona de interés, 3) rango de precio, 4) número de habitaciones, y 5) fecha de entrada deseada. "
-                "Haz una pregunta a la vez y espera respuesta antes de continuar. Sé amable y claro."
-            )
-        })
 
     if user_input:
         conversacion.append({"role": "user", "content": user_input})
@@ -117,6 +108,10 @@ def voice():
             return "¿Cuántas habitaciones necesitas?"
         if not fecha:
             return "¿Para qué fecha deseas mudarte?"
+        if operacion and operacion not in ["compra", "venta"]:
+            return "Disculpa, no entendí si deseas comprar o vender. ¿Podrías repetirlo?"
+        if precio and not re.search(r"\d+", precio):
+            return "Disculpa, ¿podrías indicarme un presupuesto aproximado en números?"
         return None
 
     pregunta_siguiente = determinar_pregunta_siguiente(operacion, zona, precio, habitaciones, fecha)
