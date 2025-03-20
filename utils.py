@@ -13,7 +13,7 @@ engine = pyttsx3.init()
 # Logging
 os.makedirs("logs", exist_ok=True)
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-log_filename = f"logs/conversacion_{timestamp}.txt"
+log_filename = f"storage/logs/conversacion_{timestamp}.log"
 log_file = open(log_filename, "w")
 
 def log(text):

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 from utils import log, log_filename
 import openai
+from openai import OpenAI
 
 load_dotenv()
 BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:5000")
@@ -33,15 +34,17 @@ def guardar_lead(zona, precio, habitaciones, conversacion=""):
                    (zona, precio, habitaciones, conversacion))
     conn.commit()
 
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 def generar_respuesta_chatgpt(conversacion):
     log(f"[CHATGPT] Enviando contexto:\n{conversacion}")
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=conversacion,
         temperature=0.7,
         max_tokens=100
     )
-    return response.choices[0].message['content'].strip()
+    return response.choices[0].message.content.strip()
 
 @app.route("/voice", methods=['POST'])
 def voice():
@@ -49,12 +52,12 @@ def voice():
     log(f"[INPUT DEL USUARIO] {user_input}")
 
     # Cargar o inicializar conversación
-    if not os.path.exists("conversacion.tmp"):
+    if not os.path.exists("storage/app/conversacion.tmp"):
         conversacion = [
             {"role": "system", "content": "Eres un agente inmobiliario amable que ayuda a recopilar información para encontrar un alquiler. Haz una pregunta a la vez. Primero pregunta en qué zona desea alquilar, luego el rango de precio, y luego cuántas habitaciones necesita."},
         ]
     else:
-        with open("conversacion.tmp", "r") as f:
+        with open("storage/app/conversacion.tmp", "r") as f:
             raw = f.read().strip()
             conversacion = eval(raw) if raw else []
 
@@ -66,7 +69,7 @@ def voice():
     conversacion.append({"role": "assistant", "content": respuesta})
 
     # Guardar conversación temporal
-    with open("conversacion.tmp", "w") as f:
+    with open("storage/app/conversacion.tmp", "w") as f:
         f.write(str(conversacion))
 
     # Verificar si ya se tienen todos los datos
@@ -84,7 +87,7 @@ def voice():
     if zona and precio and habitaciones:
         conversacion_txt = "\n".join([f"{m['role']}: {m['content']}" for m in conversacion])
         guardar_lead(zona, precio, habitaciones, conversacion_txt)
-        os.remove("conversacion.tmp")
+        os.remove("storage/app/conversacion.tmp")
         final_resp = VoiceResponse()
         final_resp.say("Gracias por tu información. Un asesor se pondrá en contacto contigo.", voice="alice", language="es-ES")
         return Response(str(final_resp), mimetype="application/xml")
