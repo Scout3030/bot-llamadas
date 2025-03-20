@@ -91,7 +91,14 @@ def voice():
         respuesta = "Hola, soy tu asistente inmobiliario. ¿Qué tipo de operación deseas? ¿Compra o venta?"
         conversacion.append({"role": "assistant", "content": respuesta})
         twiml = VoiceResponse()
-        gather = twiml.gather(input="speech", speechTimeout="auto", action="/voice", method="POST")
+        gather = twiml.gather(
+            input="speech",
+            speechTimeout="auto",
+            language="es-ES",
+            hints="comprar, alquilar, vivienda, casa, euros, zona, centro, habitaciones, una, dos, tres",
+            action="/voice",
+            method="POST"
+        )
         gather.say(respuesta, voice="alice", language="es-ES")
         return Response(str(twiml), mimetype="application/xml")
 
@@ -120,7 +127,14 @@ def voice():
 
     # Continuar conversación
     twiml = VoiceResponse()
-    gather = twiml.gather(input="speech", speechTimeout="auto", action="/voice", method="POST")
+    gather = twiml.gather(
+        input="speech",
+        speechTimeout="auto",
+        language="es-ES",
+        hints="comprar, alquilar, vivienda, casa, euros, zona, centro, habitaciones, una, dos, tres",
+        action="/voice",
+        method="POST"
+    )
     gather.say(respuesta, voice="alice", language="es-ES")
     return Response(str(twiml), mimetype="application/xml")
 
