@@ -80,7 +80,7 @@ def voice():
     if user_input:
         pregunta_actual = preguntas[estado["pregunta_actual"]]
         prompt_validacion = [
-            {"role": "system", "content": f"Evalúa si esta respuesta del usuario es coherente con la pregunta '{pregunta_actual['texto']}'. Solo responde 'válida' o 'inválida'."},
+            {"role": "system", "content": f"Actúa como un asistente inmobiliario. Evalúa si la respuesta del usuario responde correctamente a la pregunta '{pregunta_actual['texto']}'. Si responde correctamente, di solo 'válida'. Si no responde a lo que se pregunta, di solo 'inválida'."},
             {"role": "user", "content": user_input}
         ]
         validacion = generar_respuesta_chatgpt(prompt_validacion).lower()
@@ -114,7 +114,9 @@ def voice():
 
     # Verificar si ya se completaron todas las preguntas
     if estado["pregunta_actual"] >= len(preguntas):
-        conversacion_txt = "\n".join([f"{k}: {v}" for k, v in estado["respuestas"].items()])
+        conversacion_txt = "\n".join(
+            [f"{msg['role']}: {msg['content']}" for msg in estado.get("historial", [])]
+        )
         guardar_lead(
             estado["respuestas"].get("operacion", ""),
             estado["respuestas"].get("zona", ""),
