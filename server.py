@@ -72,6 +72,14 @@ def voice():
     user_input = request.form.get("SpeechResult", "").strip()
     log(f"[INPUT DEL USUARIO] {user_input}")
 
+    if not user_input:
+        log("[SIN RESPUESTA] El usuario no respondió. Repetimos la última pregunta.")
+        twiml = VoiceResponse()
+        gather = twiml.gather(input="speech", timeout=10, action="/voice", method="POST")
+        ultima_pregunta = next((msg["content"] for msg in reversed(conversacion) if msg["role"] == "assistant"), "¿Podrías repetir por favor?")
+        gather.say(ultima_pregunta, voice="alice", language="es-ES")
+        return Response(str(twiml), mimetype="application/xml")
+
     # Cargar o inicializar conversación
     if not os.path.exists("storage/app/conversacion.tmp"):
         conversacion = []
@@ -94,19 +102,28 @@ def voice():
     if user_input:
         conversacion.append({"role": "user", "content": user_input})
 
-    # Generar respuesta de IA
-    respuesta = generar_respuesta_chatgpt(conversacion)
-    conversacion.append({"role": "assistant", "content": respuesta})
-
-    # Guardar conversación temporal
-    os.makedirs("storage/app", exist_ok=True)
-    with open("storage/app/conversacion.tmp", "w") as f:
-        f.write(str(conversacion))
-
-    # Extraer datos
+    # Extraer datos actuales
     operacion, zona, precio, habitaciones, fecha = extraer_datos(conversacion)
 
-    if operacion and zona and precio and habitaciones and fecha:
+    # Determinar siguiente pregunta basada en flujo guiado
+    def determinar_pregunta_siguiente(operacion, zona, precio, habitaciones, fecha):
+        if not operacion:
+            return "¿Qué tipo de operación deseas? ¿Compra o venta?"
+        if not zona:
+            return "¿En qué zona estás buscando?"
+        if not precio:
+            return "¿Cuál es tu presupuesto aproximado?"
+        if not habitaciones:
+            return "¿Cuántas habitaciones necesitas?"
+        if not fecha:
+            return "¿Para qué fecha deseas mudarte?"
+        return None
+
+    pregunta_siguiente = determinar_pregunta_siguiente(operacion, zona, precio, habitaciones, fecha)
+    if pregunta_siguiente:
+        respuesta = pregunta_siguiente
+        conversacion.append({"role": "assistant", "content": respuesta})
+    else:
         conversacion_txt = "\n".join([f"{m['role']}: {m['content']}" for m in conversacion])
         guardar_lead(operacion, zona, precio, habitaciones, fecha, conversacion_txt)
         os.remove("storage/app/conversacion.tmp")
@@ -116,8 +133,8 @@ def voice():
 
     # Continuar conversación
     twiml = VoiceResponse()
-    twiml.say(respuesta, voice="alice", language="es-ES")
-    twiml.gather(input="speech", timeout=10, action="/voice", method="POST")
+    gather = twiml.gather(input="speech", timeout=10, action="/voice", method="POST")
+    gather.say(respuesta, voice="alice", language="es-ES")
     return Response(str(twiml), mimetype="application/xml")
 
 if __name__ == "__main__":
