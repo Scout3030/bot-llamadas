@@ -72,14 +72,19 @@ def voice():
     user_input = request.form.get("SpeechResult", "").strip()
     log(f"[INPUT DEL USUARIO] {user_input}")
 
-    conversacion = [{
-        "role": "system",
-        "content": (
-            "Eres un asistente inmobiliario telefónico. Tu tarea es obtener los siguientes datos, uno por uno: "
-            "1) tipo de operación (compra o venta), 2) zona de interés, 3) rango de precio, 4) número de habitaciones, y 5) fecha de entrada deseada. "
-            "Haz una pregunta a la vez y espera respuesta antes de continuar. Sé amable y claro."
-        )
-    }]
+    if not os.path.exists("storage/app/conversacion.tmp"):
+        conversacion = [{
+            "role": "system",
+            "content": (
+                "Eres un asistente inmobiliario telefónico. Tu tarea es obtener los siguientes datos, uno por uno: "
+                "1) tipo de operación (compra o venta), 2) zona de interés, 3) rango de precio, 4) número de habitaciones, y 5) fecha de entrada deseada. "
+                "Haz una pregunta a la vez y espera respuesta antes de continuar. Sé amable y claro."
+            )
+        }]
+    else:
+        with open("storage/app/conversacion.tmp", "r") as f:
+            raw = f.read().strip()
+            conversacion = eval(raw) if raw else []
 
     if not user_input:
         log("[SIN RESPUESTA] El usuario no respondió. Iniciamos conversación con la primera pregunta.")
@@ -93,32 +98,19 @@ def voice():
     if user_input:
         conversacion.append({"role": "user", "content": user_input})
 
-    # Extraer datos actuales
+    # Enviar conversación a GPT y generar respuesta
+    respuesta = generar_respuesta_chatgpt(conversacion)
+    log(f"[PREGUNTA DEL AGENTE] {respuesta}")
+    conversacion.append({"role": "assistant", "content": respuesta})
+
+    # Guardar conversación en archivo temporal
+    os.makedirs("storage/app", exist_ok=True)
+    with open("storage/app/conversacion.tmp", "w") as f:
+        f.write(str(conversacion))
+
+    # Verificar si ya se tienen suficientes datos para guardar el lead
     operacion, zona, precio, habitaciones, fecha = extraer_datos(conversacion)
-
-    # Determinar siguiente pregunta basada en flujo guiado
-    def determinar_pregunta_siguiente(operacion, zona, precio, habitaciones, fecha):
-        if not operacion:
-            return "¿Qué tipo de operación deseas? ¿Compra o venta?"
-        if not zona:
-            return "¿En qué zona estás buscando?"
-        if not precio:
-            return "¿Cuál es tu presupuesto aproximado?"
-        if not habitaciones:
-            return "¿Cuántas habitaciones necesitas?"
-        if not fecha:
-            return "¿Para qué fecha deseas mudarte?"
-        if operacion and operacion not in ["compra", "venta"]:
-            return "Disculpa, no entendí si deseas comprar o vender. ¿Podrías repetirlo?"
-        if precio and not re.search(r"\d+", precio):
-            return "Disculpa, ¿podrías indicarme un presupuesto aproximado en números?"
-        return None
-
-    pregunta_siguiente = determinar_pregunta_siguiente(operacion, zona, precio, habitaciones, fecha)
-    if pregunta_siguiente:
-        respuesta = pregunta_siguiente
-        conversacion.append({"role": "assistant", "content": respuesta})
-    else:
+    if operacion and zona and precio and habitaciones and fecha:
         conversacion_txt = "\n".join([f"{m['role']}: {m['content']}" for m in conversacion])
         guardar_lead(operacion, zona, precio, habitaciones, fecha, conversacion_txt)
         os.remove("storage/app/conversacion.tmp")
