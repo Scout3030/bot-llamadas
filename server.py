@@ -53,6 +53,8 @@ def generar_respuesta_chatgpt(conversacion):
 @app.route("/voice", methods=['POST'])
 def voice():
     user_input = request.form.get("SpeechResult", "").strip()
+    call_sid = request.form.get("CallSid")
+    conversacion_file = f"storage/app/conversacion_{call_sid}.tmp"
     log(f"[INPUT DEL USUARIO] {user_input}")
 
     # Estructura de flujo de preguntas
@@ -65,8 +67,8 @@ def voice():
     ]
 
     # Cargar estado anterior
-    if os.path.exists("storage/app/conversacion.tmp"):
-        with open("storage/app/conversacion.tmp", "r") as f:
+    if os.path.exists(conversacion_file):
+        with open(conversacion_file, "r") as f:
             estado = eval(f.read().strip())
     else:
         estado = {
@@ -108,7 +110,7 @@ def voice():
                     method="POST"
                 )
                 gather.say(respuesta, voice="alice", language="es-ES")
-                with open("storage/app/conversacion.tmp", "w") as f:
+                with open(conversacion_file, "w") as f:
                     f.write(str(estado))
                 return Response(str(twiml), mimetype="application/xml")
 
@@ -125,7 +127,7 @@ def voice():
             estado["respuestas"].get("fecha", ""),
             conversacion_txt
         )
-        os.remove("storage/app/conversacion.tmp")
+        os.remove(conversacion_file)
         final_resp = VoiceResponse()
         final_resp.say("Gracias por tu información. Un asesor se pondrá en contacto contigo.", voice="alice", language="es-ES")
         return Response(str(final_resp), mimetype="application/xml")
@@ -136,7 +138,7 @@ def voice():
 
     # Guardar estado actualizado
     os.makedirs("storage/app", exist_ok=True)
-    with open("storage/app/conversacion.tmp", "w") as f:
+    with open(conversacion_file, "w") as f:
         f.write(str(estado))
 
     twiml = VoiceResponse()
