@@ -67,6 +67,20 @@ def extraer_datos(conversacion):
                 fecha = txt
     return operacion, zona, precio, habitaciones, fecha
 
+def siguiente_pregunta_por_dato_faltante(operacion, zona, precio, habitaciones, fecha):
+    if not operacion:
+        return "Pregunta al usuario qué tipo de operación desea realizar, si compra o venta."
+    elif not zona:
+        return "Ya sabemos que quiere comprar o vender. Pregunta ahora en qué zona desea buscar la propiedad."
+    elif not precio:
+        return "Ya sabemos zona y operación. Pregunta ahora cuál es su presupuesto aproximado."
+    elif not habitaciones:
+        return "Pregunta cuántas habitaciones necesita la propiedad."
+    elif not fecha:
+        return "Pregunta para qué fecha desea mudarse o cerrar la compra."
+    else:
+        return None
+
 @app.route("/voice", methods=['POST'])
 def voice():
     user_input = request.form.get("SpeechResult", "").strip()
@@ -105,19 +119,21 @@ def voice():
     if user_input:
         conversacion.append({"role": "user", "content": user_input})
 
-    # Enviar conversación a GPT y generar respuesta
-    respuesta = generar_respuesta_chatgpt(conversacion)
-    log(f"[PREGUNTA DEL AGENTE] {respuesta}")
-    conversacion.append({"role": "assistant", "content": respuesta})
-
-    # Guardar conversación en archivo temporal
-    os.makedirs("storage/app", exist_ok=True)
-    with open("storage/app/conversacion.tmp", "w") as f:
-        f.write(str(conversacion))
-
     # Verificar si ya se tienen suficientes datos para guardar el lead
     operacion, zona, precio, habitaciones, fecha = extraer_datos(conversacion)
-    if operacion and zona and precio and habitaciones and fecha:
+
+    # Forzar el flujo paso a paso
+    instruccion = siguiente_pregunta_por_dato_faltante(operacion, zona, precio, habitaciones, fecha)
+
+    if instruccion:
+        prompt = [
+            {"role": "system", "content": "Eres un asistente inmobiliario amable y conversacional. Habla solo en español y haz una sola pregunta clara a la vez."},
+            {"role": "user", "content": instruccion}
+        ]
+        respuesta = generar_respuesta_chatgpt(prompt)
+        log(f"[PREGUNTA DEL AGENTE] {respuesta}")
+        conversacion.append({"role": "assistant", "content": respuesta})
+    else:
         conversacion_txt = "\n".join([f"{m['role']}: {m['content']}" for m in conversacion])
         guardar_lead(operacion, zona, precio, habitaciones, fecha, conversacion_txt)
         os.remove("storage/app/conversacion.tmp")
