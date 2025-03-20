@@ -1,9 +1,11 @@
 from flask import Flask, request, Response
 from twilio.twiml.voice_response import VoiceResponse
 import sqlite3
+from dotenv import load_dotenv
 import os
+load_dotenv()
 
-BASE_URL = os.environ.get("BASE_URL")
+BASE_URL = os.getenv("BASE_URL")
 
 app = Flask(__name__)
 

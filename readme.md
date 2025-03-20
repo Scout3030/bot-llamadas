@@ -29,3 +29,9 @@ Iniciar servidor en background
 ```` bash
 python server.py &
 ````
+
+Test on local
+
+```` bash
+curl -X POST http://127.0.0.1:5000/audio
+````
