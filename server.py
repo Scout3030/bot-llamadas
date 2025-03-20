@@ -3,6 +3,8 @@ from twilio.twiml.voice_response import VoiceResponse
 import sqlite3
 import os
 
+BASE_URL = os.environ.get("BASE_URL")
+
 app = Flask(__name__)
 
 # Create database if it doesn't exist
@@ -27,7 +29,7 @@ def guardar_lead(zona, precio, habitaciones, conversacion=""):
 def siguiente_pregunta(callback_path, texto):
     resp = VoiceResponse()
     resp.say(texto, voice='alice', language='es-ES')
-    resp.record(timeout=10, maxLength=15, transcribe=True, transcribeCallback=f"/transcripcion/{callback_path}")
+    resp.record(timeout=10, maxLength=15, transcribe=True, transcribeCallback=f"{BASE_URL}/transcripcion/{callback_path}")
     return Response(str(resp), mimetype="application/xml")
 
 @app.route("/voice", methods=['POST'])
@@ -35,7 +37,7 @@ def voice():
     resp = VoiceResponse()
     resp.say("Hola, bienvenido a Inmobiliaria Codificable.", voice='alice', language='es-ES')
     resp.say("Por favor, diga en qué zona desea alquilar después del tono.", voice='alice', language='es-ES')
-    resp.record(timeout=10, maxLength=15, transcribe=True, transcribeCallback="/transcripcion/zona")
+    resp.record(timeout=10, maxLength=15, transcribe=True, transcribeCallback=f"{BASE_URL}/transcripcion/zona")
     return Response(str(resp), mimetype="application/xml")
 
 @app.route("/transcripcion/zona", methods=['POST'])
