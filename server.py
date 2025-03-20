@@ -163,7 +163,11 @@ def voice():
         action="/voice",
         method="POST"
     )
-    gather.say(siguiente_pregunta, voice="alice", language="es-ES")
+    if estado["pregunta_actual"] == 0 and not user_input:
+        saludo = "Hola, soy Cielo, el asistente de Inmobiliaria BuenasPropiedades. " + siguiente_pregunta
+        gather.say(saludo, voice="alice", language="es-ES")
+    else:
+        gather.say(siguiente_pregunta, voice="alice", language="es-ES")
     return Response(str(twiml), mimetype="application/xml")
 
 if __name__ == "__main__":
