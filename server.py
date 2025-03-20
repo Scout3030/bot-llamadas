@@ -15,20 +15,33 @@ openai.api_key = OPENAI_API_KEY
 
 app = Flask(__name__)
 
-# Crear base de datos
+# Crear base de datos y asegurar columnas
 conn = sqlite3.connect("clientes.db", check_same_thread=False)
 cursor = conn.cursor()
+
+# Crear tabla si no existe
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS leads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        operacion TEXT,
-        zona TEXT,
-        precio TEXT,
-        habitaciones TEXT,
-        fecha TEXT,
-        conversacion TEXT
+        id INTEGER PRIMARY KEY AUTOINCREMENT
     )
 ''')
+
+# Agregar columnas si faltan
+columnas = {
+    "operacion": "TEXT",
+    "zona": "TEXT",
+    "precio": "TEXT",
+    "habitaciones": "TEXT",
+    "fecha": "TEXT",
+    "conversacion": "TEXT"
+}
+
+for columna, tipo in columnas.items():
+    try:
+        cursor.execute(f"ALTER TABLE leads ADD COLUMN {columna} {tipo}")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
+
 conn.commit()
 
 def guardar_lead(operacion, zona, precio, habitaciones, fecha, conversacion=""):
