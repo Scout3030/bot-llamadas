@@ -72,14 +72,6 @@ def voice():
     user_input = request.form.get("SpeechResult", "").strip()
     log(f"[INPUT DEL USUARIO] {user_input}")
 
-    if not user_input:
-        log("[SIN RESPUESTA] El usuario no respondió. Repetimos la última pregunta.")
-        twiml = VoiceResponse()
-        gather = twiml.gather(input="speech", timeout=10, action="/voice", method="POST")
-        ultima_pregunta = next((msg["content"] for msg in reversed(conversacion) if msg["role"] == "assistant"), "¿Podrías repetir por favor?")
-        gather.say(ultima_pregunta, voice="alice", language="es-ES")
-        return Response(str(twiml), mimetype="application/xml")
-
     # Cargar o inicializar conversación
     if not os.path.exists("storage/app/conversacion.tmp"):
         conversacion = []
@@ -87,6 +79,14 @@ def voice():
         with open("storage/app/conversacion.tmp", "r") as f:
             raw = f.read().strip()
             conversacion = eval(raw) if raw else []
+
+    if not user_input:
+        log("[SIN RESPUESTA] El usuario no respondió. Repetimos la última pregunta.")
+        twiml = VoiceResponse()
+        gather = twiml.gather(input="speech", timeout=10, action="/voice", method="POST")
+        ultima_pregunta = next((msg["content"] for msg in reversed(conversacion) if msg["role"] == "assistant"), "¿Podrías repetir por favor?")
+        gather.say(ultima_pregunta, voice="alice", language="es-ES")
+        return Response(str(twiml), mimetype="application/xml")
 
     # Agregar prompt inicial si no existe
     if not any(m for m in conversacion if m["role"] == "system"):
