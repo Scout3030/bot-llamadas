@@ -53,16 +53,21 @@ def voice():
 
     # Cargar o inicializar conversación
     if not os.path.exists("storage/app/conversacion.tmp"):
-        conversacion = [
-            {"role": "system", "content": "Eres un agente inmobiliario amable que ayuda a recopilar información para encontrar un alquiler. Haz una pregunta a la vez. Primero pregunta en qué zona desea alquilar, luego el rango de precio, y luego cuántas habitaciones necesita."},
-        ]
+        conversacion = []
     else:
         with open("storage/app/conversacion.tmp", "r") as f:
             raw = f.read().strip()
             conversacion = eval(raw) if raw else []
 
-        if user_input:
-            conversacion.append({"role": "user", "content": user_input})
+    # Siempre asegurar el mensaje del system prompt
+    if not any(m for m in conversacion if m["role"] == "system"):
+        conversacion.insert(0, {
+            "role": "system",
+            "content": "Eres un agente inmobiliario amable que ayuda a recopilar información para encontrar un alquiler. Haz una pregunta a la vez. Primero pregunta en qué zona desea alquilar, luego el rango de precio, y luego cuántas habitaciones necesita."
+        })
+
+    if user_input:
+        conversacion.append({"role": "user", "content": user_input})
 
     # Generar respuesta
     respuesta = generar_respuesta_chatgpt(conversacion)
